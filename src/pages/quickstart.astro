@@ -1,8 +1,10 @@
 ---
 import Base from '../layouts/Base.astro';
 import CodeTabs from '../components/CodeTabs.astro';
+import ProductIcon from '../components/ProductIcon.astro';
+import TableWalkthrough from '../components/TableWalkthrough.astro';
 
-const build = `git clone --recurse-submodules https://github.com/ila/openivm.git
+const build = `git clone --recurse-submodules https://github.com/openivm/openivm.git
 cd openivm
 GEN=ninja make            # release build; plain \`make\` works without ninja
 
@@ -12,13 +14,26 @@ GEN=ninja make            # release build; plain \`make\` works without ninja
 const firstView = `CREATE TABLE sales (region VARCHAR, product VARCHAR, amount INT);
 INSERT INTO sales VALUES ('US', 'Widget', 100), ('EU', 'Gadget', 200);
 
+SELECT * FROM sales ORDER BY region;
+-- EU | Gadget | 200
+-- US | Widget | 100
+
 CREATE MATERIALIZED VIEW regional_totals AS
     SELECT region, SUM(amount) AS total, COUNT(*) AS cnt
     FROM sales GROUP BY region;
 
+SELECT * FROM regional_totals ORDER BY region;
+-- EU  | 200 | 1
+-- US  | 100 | 1
+
 -- Changes are captured as deltas automatically
 INSERT INTO sales VALUES ('US', 'Bolt', 50), ('JP', 'Gear', 300);
 DELETE FROM sales WHERE product = 'Gadget';
+
+SELECT * FROM sales ORDER BY region, product;
+-- JP | Gear   | 300
+-- US | Bolt   |  50
+-- US | Widget | 100
 
 PRAGMA refresh('regional_totals');
 
@@ -75,8 +90,86 @@ const tabs = [
   { label: 'Scheduled refresh', code: schedule, note: 'Views with <code>REFRESH EVERY</code> are maintained by a background daemon, which only sees settings made with <code>SET GLOBAL</code>.' },
   { label: 'DuckLake pipelines', code: ducklake, note: 'Over <a href="https://ducklake.select/">DuckLake</a>, deltas come from native snapshots, with no duplicated storage.' },
   { label: 'See the generated SQL', code: inspect, note: 'OpenIVM is a compiler: you can read exactly what it runs.' },
-  { label: 'Apache Spark', badge: 'soon', note: 'The Spark integration, with quickstarts and best practices for dbt workloads, is in development. <a href="https://github.com/ila/openivm/issues">Open an issue</a> to get involved.' },
 ];
+
+const sparkBuild = `git clone https://github.com/openivm/openivm-spark.git
+cd openivm-spark
+./contrib/bootstrap-dev-env.sh
+npx --no-install nx run devcontainer:up
+npx --no-install nx run devcontainer:exec -- \\
+  npx --no-install nx run spark-ext:assembly --configuration=spark-3.5`;
+
+const sparkShell = `JAVA_MODULE_OPTIONS="--add-opens=java.base/java.lang=ALL-UNNAMED \\
+--add-opens=java.base/java.lang.invoke=ALL-UNNAMED \\
+--add-opens=java.base/java.lang.reflect=ALL-UNNAMED \\
+--add-opens=java.base/java.io=ALL-UNNAMED \\
+--add-opens=java.base/java.net=ALL-UNNAMED \\
+--add-opens=java.base/java.nio=ALL-UNNAMED \\
+--add-opens=java.base/java.util=ALL-UNNAMED \\
+--add-opens=java.base/java.util.concurrent=ALL-UNNAMED \\
+--add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED \\
+--add-opens=java.base/sun.nio.ch=ALL-UNNAMED \\
+--add-opens=java.base/sun.nio.cs=ALL-UNNAMED \\
+--add-opens=java.base/sun.security.action=ALL-UNNAMED \\
+--add-opens=java.base/sun.util.calendar=ALL-UNNAMED \\
+--add-exports=java.base/sun.nio.ch=ALL-UNNAMED"
+
+spark-sql \\
+  --master 'local[1]' \\
+  --packages io.delta:delta-spark_2.12:3.2.0 \\
+  --jars spark-ext/ivm-extension/target/spark-3.5-antlr-4.9.3/scala-2.12/ivmExtension-0.1.0-SNAPSHOT-assembly.jar \\
+  --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension,org.openivm.spark.OpenIvmSparkExtensions \\
+  --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \\
+  --conf spark.openivm.enabled=true \\
+  --conf spark.driver.extraJavaOptions="$JAVA_MODULE_OPTIONS" \\
+  --conf spark.executor.extraJavaOptions="$JAVA_MODULE_OPTIONS"`;
+
+const sparkInstall = `curl -fL https://archive.apache.org/dist/spark/spark-3.5.1/spark-3.5.1-bin-hadoop3.tgz -o /tmp/spark-3.5.1-bin-hadoop3.tgz
+tar -xzf /tmp/spark-3.5.1-bin-hadoop3.tgz -C /tmp
+export PATH="/tmp/spark-3.5.1-bin-hadoop3/bin:$PATH"`;
+
+const sparkView = `CREATE TABLE sales_i1 (region STRING, amount INT) USING DELTA;
+INSERT INTO sales_i1 VALUES ('east', 100), ('west', 200);
+
+SELECT * FROM sales_i1 ORDER BY region;
+-- east | 100
+-- west | 200
+
+CREATE MATERIALIZED VIEW mv_i1 AS
+    SELECT region, SUM(amount) AS total, COUNT(*) AS cnt
+    FROM sales_i1 GROUP BY region;
+
+SELECT region, total, cnt FROM mv_i1 ORDER BY region;
+-- east  | 100 | 1
+-- west  | 200 | 1
+
+INSERT INTO sales_i1 VALUES ('north', 300), ('east', 50);
+SELECT * FROM sales_i1 ORDER BY region, amount;
+-- east  |  50
+-- east  | 100
+-- north | 300
+-- west  | 200
+
+REFRESH MATERIALIZED VIEW mv_i1;
+
+SELECT region, total, cnt FROM mv_i1 ORDER BY region;
+-- east  | 150 | 2
+-- north | 300 | 1
+-- west  | 200 | 1`;
+
+const sparkSettings: [string, string, string, number][] = [
+  ['enabled', 'false', 'Enable OpenIVM for this Spark session.', 20],
+  ['statePath', 'warehouse dir', 'Local directory for RocksDB state; defaults to spark.sql.warehouse.dir.', 39],
+  ['stateSync.uri', 'unset', 'Mirror local state to a Hadoop filesystem URI for durability.', 51],
+  ['catalog.backend', 'rocksdb', 'Choose rocksdb or delta for the OpenIVM metadata catalog.', 129],
+  ['changeFeed.mode', 'intercept', 'Choose how base-table changes are captured; Delta CDF is also supported.', 259],
+  ['delta.enableDeletionVectors', 'true', 'Use Delta deletion vectors on materialized-view backing tables.', 153],
+  ['delta.optimizeWrite', 'false', 'Enable Delta optimized writes on materialized-view backing tables.', 154],
+  ['profile.refresh', 'false', 'Capture per-step refresh profiles.', 188],
+  ['queryLog.enabled', 'false', 'Capture CREATE and REFRESH SQL in the OpenIVM query log.', 215],
+  ['metrics.enabled', 'true', 'Register and update Spark-native OpenIVM metrics.', 221],
+];
+const sparkSettingsSource = 'https://github.com/openivm/openivm-spark/blob/main/spark-ext/ivm-common/src/main/scala/org/openivm/spark/common/FeatureGate.scala';
 
 const pragmas: [string, string][] = [
   ["PRAGMA refresh('v')", 'Refresh a materialized view'],
@@ -96,24 +189,29 @@ const settings: [string, string, string][] = [
 ---
 
 <Base
-  title="DuckDB materialized views quickstart · OpenIVM"
-  description="Build the OpenIVM DuckDB extension, create your first incrementally maintained materialized view, and inspect the SQL it generates."
+  title="Materialized views quickstart · OpenIVM"
+  description="Build OpenIVM for DuckDB or Apache Spark and refresh your first materialized view."
 >
   <header class="page-head">
     <div class="container">
       <p class="eyebrow">Quickstart</p>
       <h1>From zero to incremental in a few lines.</h1>
       <p class="lede">
-        OpenIVM is under active testing and currently needs a source build against DuckDB v1.5.4. A DuckDB community
-        extension is planned for the end of 2026.
+        Choose your engine to build OpenIVM and refresh your first materialized view.
       </p>
+      <div class="quick-tabs" role="tablist" aria-label="Quickstart environment">
+        <button id="tab-local-duckdb" type="button" role="tab" data-quick-tab="local-duckdb" aria-controls="panel-local-duckdb" aria-selected="true"><ProductIcon product="duckdb" /> Local DuckDB</button>
+        <button id="tab-local-spark" type="button" role="tab" data-quick-tab="local-spark" aria-controls="panel-local-spark" aria-selected="false" tabindex="-1"><ProductIcon product="spark" /> Local Spark</button>
+        <button id="tab-fabric-spark" type="button" role="tab" data-quick-tab="fabric-spark" aria-controls="panel-fabric-spark" aria-selected="false" tabindex="-1"><ProductIcon product="fabric" /> Microsoft Fabric Spark</button>
+      </div>
     </div>
   </header>
 
+  <div id="panel-local-duckdb" role="tabpanel" aria-labelledby="tab-local-duckdb" data-quick-panel="local-duckdb">
   <section>
     <div class="container">
       <div class="step-head"><span class="num">1</span><h2>Build</h2></div>
-      <p class="lede">You need git, CMake ≥ 3.5, a C++ compiler, and optionally Ninja for faster builds.</p>
+      <p class="lede">For DuckDB v1.5.4, you need git, CMake ≥ 3.5, a C++ compiler, and optionally Ninja for faster builds.</p>
       <CodeTabs id="build" label="Build" tabs={[{ label: 'Shell', code: build, lang: 'sh' }]} />
     </div>
   </section>
@@ -122,6 +220,7 @@ const settings: [string, string, string][] = [
     <div class="container">
       <div class="step-head"><span class="num">2</span><h2>Create a view and refresh it</h2></div>
       <CodeTabs id="qs" label="Quickstart examples" tabs={tabs} />
+      <TableWalkthrough engine="duckdb" />
     </div>
   </section>
 
@@ -153,16 +252,107 @@ const settings: [string, string, string][] = [
         </div>
       </div>
       <p class="links">
-        <a href="https://github.com/ila/openivm/blob/main/docs/build/building.md">Build guide</a>
-        <a href="https://github.com/ila/openivm/tree/main/docs">Full documentation</a>
-        <a href="https://github.com/ila/openivm/blob/main/docs/limitations.md">Limitations</a>
+        <a href="https://github.com/openivm/openivm/blob/main/docs/build/building.md">Build guide</a>
+        <a href="https://github.com/openivm/openivm/tree/main/docs">Full documentation</a>
+        <a href="https://github.com/openivm/openivm/blob/main/docs/limitations.md">Limitations</a>
         <a href="/how-it-works/">How it works →</a>
       </p>
     </div>
   </section>
+  </div>
+
+  <div id="panel-local-spark" role="tabpanel" aria-labelledby="tab-local-spark" data-quick-panel="local-spark" hidden>
+    <section>
+      <div class="container">
+        <div class="step-head"><span class="num">1</span><h2>Build the extension JAR</h2></div>
+        <p class="lede">Start with Git, Bash and Docker. These commands create the project's devcontainer and build the Spark 3.5 assembly inside it.</p>
+        <CodeTabs id="spark-build" label="Spark build" tabs={[{ label: 'Shell', code: sparkBuild, lang: 'sh' }]} />
+        <p class="detail">The JAR is written under <code>spark-ext/ivm-extension/target/spark-3.5-antlr-4.9.3/scala-2.12/</code>. For Spark 4.1 use the <code>spark-4.1</code> build configuration instead; the runtime versions and JAR path differ. See the <a href="https://github.com/openivm/openivm-spark/blob/main/spark-ext/docs/DEVELOPMENT.md">build guide</a>.</p>
+      </div>
+    </section>
+    <section class="band">
+      <div class="container">
+        <div class="step-head"><span class="num">2</span><h2>Start a local Spark session</h2></div>
+        <p class="lede">In VS Code, use <strong>Dev Containers: Attach to Running Container</strong>, open <code>/workspaces/openivm-spark</code>, and open a terminal. The image provides Java 17 and matching OpenIVM native binaries; its <code>OPENIVM_CLI_PATH</code> and <code>OPENIVM_EXTENSION_PATH</code> point to them. Install Spark 3.5.1 for this terminal:</p>
+        <CodeTabs id="spark-install" label="Install Spark" tabs={[{ label: 'Shell', code: sparkInstall, lang: 'sh' }]} />
+        <p class="detail">Then, from the repository root, start the Spark SQL CLI with Delta Lake and OpenIVM enabled:</p>
+        <CodeTabs id="spark-shell" label="Spark session" tabs={[{ label: 'Shell', code: sparkShell, lang: 'sh' }]} />
+        <p class="detail">The Delta package supplies Delta Lake 3.2.0; the two extensions and Delta catalog must be configured before the Spark session starts. The explicit Java module options come from the project's <a href="https://github.com/openivm/openivm-spark/blob/main/spark-ext/.sbtopts">.sbtopts</a>. See <a href="https://github.com/openivm/openivm-spark/blob/main/spark-ext/docs/ACTIVATION.md">activation</a> and <a href="https://spark.apache.org/downloads.html">Spark downloads</a>.</p>
+      </div>
+    </section>
+    <section>
+      <div class="container">
+        <div class="step-head"><span class="num">3</span><h2>Create a view and refresh it</h2></div>
+        <p class="lede">Paste this SQL into <code>spark-sql</code>. It creates a Delta table and view, inserts more rows, then explicitly refreshes the view. Start with names that do not already exist.</p>
+        <CodeTabs id="spark-view" label="Spark materialized view" tabs={[{ label: 'Spark SQL', code: sparkView, lang: 'sql' }]} />
+        <TableWalkthrough engine="spark" />
+        <p class="detail">After refresh, east totals 150 in two rows, north totals 300, and west totals 200. See <a href="https://github.com/openivm/openivm-spark/blob/main/spark-ext/docs/MATERIALIZED_VIEWS.md">materialized view documentation</a>.</p>
+      </div>
+    </section>
+    <section class="band">
+      <div class="container">
+        <div class="step-head"><span class="num">4</span><h2>Reference</h2></div>
+        <p class="lede">Selected Spark configuration settings. Set session startup options with <code>--conf</code>; links go to their definitions on the main branch.</p>
+        <div class="card table-wrap spark-reference"><table class="data-table">
+          <thead><tr><th>Setting</th><th>Default</th><th>Description</th></tr></thead>
+          <tbody>{sparkSettings.map(([name, value, description, line]) => <tr>
+            <td><a href={`${sparkSettingsSource}#L${line}`}><code>spark.openivm.{name}</code></a></td><td class="mono muted">{value}</td><td class="muted">{description}</td>
+          </tr>)}</tbody>
+        </table></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="panel-fabric-spark" role="tabpanel" aria-labelledby="tab-fabric-spark" data-quick-panel="fabric-spark" hidden>
+    <section><div class="container"><div class="fabric-hero"><div class="fabric-emblem"><img src="/icons/fabric.svg" alt="" width="76" height="76" /></div><div><span class="pill">Coming soon</span><h2>Microsoft Fabric Spark</h2><p class="lede">An OpenIVM quickstart for Microsoft Fabric Spark 3.5/4.X+ is on its way.</p></div></div></div></section>
+  </div>
 </Base>
 
+<script>
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-quick-tab]')];
+  const select = (name: string) => {
+    const active = tabs.find(tab => tab.dataset.quickTab === name) ?? tabs[0];
+    if (!active) return;
+    for (const tab of tabs) {
+      const selected = tab === active;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      const panel = document.getElementById(tab.getAttribute('aria-controls')!);
+      if (panel) panel.hidden = !selected;
+    }
+  };
+  const navigate = (tab: HTMLButtonElement) => {
+    location.hash = tab.dataset.quickTab!;
+    select(tab.dataset.quickTab!);
+  };
+  for (const tab of tabs) tab.addEventListener('click', () => navigate(tab));
+  document.querySelector('[aria-label="Quickstart environment"]')?.addEventListener('keydown', event => {
+    const e = event as KeyboardEvent;
+    const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+    if (index < 0 || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1
+      : (index + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length;
+    tabs[next]!.focus();
+    navigate(tabs[next]!);
+  });
+  window.addEventListener('hashchange', () => select(location.hash.slice(1)));
+  select(location.hash.slice(1));
+</script>
+
 <style>
+  .quick-tabs { display: flex; gap: 8px; overflow-x: auto; margin-top: 30px; --product-icon-size:34px; --product-glyph-size:24px; }
+  .quick-tabs button { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; padding: 8px 12px; color: var(--muted); font: inherit; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+  .quick-tabs button[aria-selected='true'] { color: var(--text); border-color: var(--accent); background: var(--surface-2); }
+  .quick-tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .detail { margin-top: 20px; color: var(--muted); }
+  .spark-reference { padding: 12px 16px; }
+  .fabric-hero { position:relative; overflow:hidden; display:flex; align-items:center; gap:30px; min-height:260px; padding:clamp(28px,5vw,60px); border:1px solid var(--border-strong); border-radius:20px; background:radial-gradient(circle at 15% 50%, rgba(162,122,255,.25), transparent 34%), radial-gradient(circle at 85% 15%, rgba(255,114,198,.13), transparent 45%), var(--surface); }
+  .fabric-hero h2 { margin:16px 0 8px; font-size:clamp(1.7rem,4vw,2.7rem); }
+  .fabric-hero .lede { margin:0; }
+  .fabric-emblem { display:grid; place-items:center; width:100px; height:100px; flex:none; }
+  .fabric-emblem img { display:block; filter:drop-shadow(0 0 20px rgba(141,222,210,.25)); }
+  .detail + :global(.tabs) { margin-top: 20px; }
   .muted {
     color: var(--muted);
   }
@@ -218,5 +408,9 @@ const settings: [string, string, string][] = [
     .ref {
       grid-template-columns: 1fr;
     }
+  }
+  @media (max-width: 640px) {
+    .quick-tabs { flex-wrap: wrap; overflow: visible; }
+    .fabric-hero { flex-direction:column; align-items:flex-start; }
   }
 </style>

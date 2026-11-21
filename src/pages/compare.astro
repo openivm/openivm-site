@@ -1,5 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
+import ProductIcon from '../components/ProductIcon.astro';
+import CompareMark from '../components/CompareMark.astro';
 
 type Row = {
   name: string;
@@ -10,23 +12,26 @@ type Row = {
   sql: string;
   license: string;
   self?: boolean;
+  icon: 'openivm' | 'postgresql' | 'materialize' | 'feldera' | 'risingwave' | 'snowflake' | 'databricks';
 };
 
 // Summarized from each project's public docs and repository, September 2026.
 const rows: Row[] = [
   {
     name: 'OpenIVM',
-    href: 'https://github.com/ila/openivm',
+    href: 'https://github.com/openivm/openivm/tree/main/docs',
+    icon: 'openivm',
     kind: 'IVM compiler (SQL in, SQL out)',
-    runs: 'Inside your engine as an extension: DuckDB today, Spark in development',
-    updates: 'On demand (PRAGMA refresh) or on a schedule (REFRESH EVERY)',
-    sql: 'Inner and outer joins, aggregates, DISTINCT, semi/anti joins, windows, CTEs; other shapes fall back to full refresh',
+    runs: 'Inside DuckDB or Apache Spark as an extension',
+    updates: 'On demand; DuckDB also supports scheduled refresh',
+    sql: 'Joins, aggregates and other SQL shapes; coverage and fallback vary by engine',
     license: 'MIT',
     self: true,
   },
   {
     name: 'pg_ivm',
     href: 'https://github.com/sraoss/pg_ivm',
+    icon: 'postgresql',
     kind: 'PostgreSQL extension',
     runs: 'Inside PostgreSQL',
     updates: 'Immediately, in AFTER triggers in the same transaction as each write',
@@ -35,7 +40,8 @@ const rows: Row[] = [
   },
   {
     name: 'Materialize',
-    href: 'https://materialize.com/',
+    href: 'https://materialize.com/docs/',
+    icon: 'materialize',
     kind: 'Streaming data warehouse (Differential Dataflow)',
     runs: 'Separate system, fed by change data capture or Kafka',
     updates: 'Continuously, as changes arrive',
@@ -44,7 +50,8 @@ const rows: Row[] = [
   },
   {
     name: 'Feldera',
-    href: 'https://www.feldera.com/',
+    href: 'https://docs.feldera.com/',
+    icon: 'feldera',
     kind: 'IVM engine built on DBSP',
     runs: 'Separate pipeline engine',
     updates: 'Continuously, as changes arrive',
@@ -53,7 +60,8 @@ const rows: Row[] = [
   },
   {
     name: 'RisingWave',
-    href: 'https://risingwave.com/',
+    href: 'https://docs.risingwave.com/',
+    icon: 'risingwave',
     kind: 'Streaming database',
     runs: 'Separate system, PostgreSQL wire protocol',
     updates: 'Continuously, as changes arrive',
@@ -63,6 +71,7 @@ const rows: Row[] = [
   {
     name: 'Snowflake Dynamic Tables',
     href: 'https://docs.snowflake.com/en/user-guide/dynamic-tables-about',
+    icon: 'snowflake',
     kind: 'Managed warehouse feature',
     runs: 'Inside Snowflake',
     updates: 'To a target lag; each refresh is incremental or full',
@@ -72,6 +81,7 @@ const rows: Row[] = [
   {
     name: 'Databricks materialized views',
     href: 'https://docs.databricks.com/aws/en/optimizations/incremental-refresh',
+    icon: 'databricks',
     kind: 'Managed lakehouse feature',
     runs: 'Inside Databricks, on serverless pipelines',
     updates: 'On a schedule or trigger; incremental when possible, best effort',
@@ -119,7 +129,7 @@ const cols: [keyof Row, string][] = [
               rows.map((r) => (
                 <tr class:list={[{ self: r.self }]}>
                   <th scope="row">
-                    <a href={r.href}>{r.name}</a>
+                    <a class="system-link" href={r.href}><ProductIcon product={r.icon} /><span>{r.name}</span></a>
                   </th>
                   {cols.map(([k]) => <td>{r[k] as string}</td>)}
                 </tr>
@@ -130,7 +140,7 @@ const cols: [keyof Row, string][] = [
       </div>
       <p class="note">
         Summarized from each project's public documentation and repository, September 2026. Spotted something out of
-        date? <a href="https://github.com/ila/openivm-site/issues">Open an issue</a>.
+        date? <a href="https://github.com/openivm/openivm-site/issues">Open an issue</a>.
       </p>
     </div>
   </section>
@@ -138,7 +148,7 @@ const cols: [keyof Row, string][] = [
   <section class="band">
     <div class="container two">
       <div>
-        <h2>What sets OpenIVM apart.</h2>
+        <h2 class="compare-heading"><CompareMark kind="check" /><span>What sets OpenIVM apart.</span></h2>
         <ul class="points">
           <li>
             <b>The output is SQL.</b> The maintenance program is ordinary SQL you can read, test and run elsewhere, not
@@ -146,7 +156,7 @@ const cols: [keyof Row, string][] = [
           </li>
           <li>
             <b>No second system.</b> No change-data-capture pipeline or separate cluster: views are maintained inside
-            DuckDB, and soon Spark, over ordinary batch tables.
+            DuckDB and Spark over ordinary batch tables.
           </li>
           <li>
             <b>Open and research-backed.</b> MIT-licensed, built at CWI Amsterdam, and described in a{' '}
@@ -155,7 +165,7 @@ const cols: [keyof Row, string][] = [
         </ul>
       </div>
       <div>
-        <h2>When something else fits better.</h2>
+        <h2 class="compare-heading"><CompareMark kind="cross" /><span>When something else fits better.</span></h2>
         <ul class="points">
           <li>
             <b>You need freshness on every write.</b> A streaming system (Materialize, Feldera, RisingWave) or
@@ -216,6 +226,7 @@ const cols: [keyof Row, string][] = [
   .cmp tbody th a {
     color: var(--text);
   }
+  .system-link { display: flex; align-items: center; gap: 9px; }
   .cmp td {
     color: var(--muted);
   }
@@ -242,6 +253,8 @@ const cols: [keyof Row, string][] = [
     font-size: clamp(1.4rem, 2.6vw, 1.9rem);
     margin-bottom: 20px;
   }
+  .compare-heading { display:grid; grid-template-columns:48px minmax(0,1fr); column-gap:14px; align-items:start; }
+  .compare-heading > span:not(:global(.compare-mark)) { padding-top:7px; }
   .points {
     list-style: none;
     margin: 0;
