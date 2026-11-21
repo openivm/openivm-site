@@ -1,0 +1,8 @@
+---
+import Base from '../layouts/Base.astro';
+import Dashboard from '../benchmark/main.tsx';
+---
+
+<Base title="Benchmark | OpenIVM" description="Explore incremental view maintenance benchmark results across engines and commits.">
+  <Dashboard client:only="preact" />
+</Base>

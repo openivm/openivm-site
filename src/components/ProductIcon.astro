@@ -1,0 +1,36 @@
+---
+import Logo from './Logo.astro';
+
+interface Props {
+  product: 'openivm' | 'duckdb' | 'spark' | 'fabric' | 'postgresql' | 'materialize' | 'feldera' | 'risingwave' | 'snowflake' | 'databricks';
+}
+const { product } = Astro.props;
+const icons: Record<Exclude<Props['product'], 'openivm'>, string> = {
+  duckdb: 'duckdb.svg', spark: 'apachespark.svg', fabric: 'fabric.svg', postgresql: 'postgresql.svg',
+  materialize: 'materialize.svg', feldera: 'feldera.svg', risingwave: 'risingwave.png',
+  snowflake: 'snowflake.svg', databricks: 'databricks.svg',
+};
+---
+<span class:list={['product-icon', product]} aria-hidden="true">
+  {product === 'openivm' ? <Logo size={24} /> : <img src={`/icons/${icons[product]}`} alt="" width="24" height="24" />}
+</span>
+
+<style>
+  .product-icon {
+    display: inline-flex;
+    flex: none;
+    width: var(--product-icon-size, 38px);
+    height: var(--product-icon-size, 38px);
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-strong);
+  }
+  img { display: block; width:var(--product-glyph-size, 26px); height:var(--product-glyph-size, 26px); filter: brightness(0) invert(1); }
+  .materialize img { transform:scale(1.3); }
+  .feldera img { transform:scale(1.15); }
+  .spark img { filter: invert(75%) sepia(43%) saturate(750%) hue-rotate(326deg); }
+  .duckdb img { filter: invert(92%) sepia(35%) saturate(500%) hue-rotate(340deg); }
+  .fabric img, .risingwave img { filter: none; }
+</style>

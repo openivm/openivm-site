@@ -128,12 +128,12 @@ const deltaRows: [string, string, number, number][] = [
   ['EU', 'Gadget', 200, -1],
 ];
 
-const DOCS = 'https://github.com/ila/openivm/blob/main/docs';
+const DOCS = 'https://github.com/openivm/openivm/blob/main/docs';
 const deeper = [
   { t: 'Delta rules', d: 'How each operator is classified (linear, product, stateful, non-linear) and what state it needs.', href: `${DOCS}/internals/linearity.md` },
-  { t: 'Operator coverage', d: 'Joins, aggregates, DISTINCT, semi/anti, windows, top-k: the delta rule and refresh strategy for each.', href: 'https://github.com/ila/openivm/tree/main/docs/operators' },
-  { t: 'Optimizations', d: 'Empty-delta skipping, delta consolidation, insert-only fast paths, FK-aware pruning.', href: 'https://github.com/ila/openivm/tree/main/docs/optimizations' },
-  { t: 'Refresh and pipelines', d: 'Refresh strategies, scheduled refresh, cascades and pipeline refresh.', href: 'https://github.com/ila/openivm/tree/main/docs/refresh' },
+  { t: 'Operator coverage', d: 'Joins, aggregates, DISTINCT, semi/anti, windows, top-k: the delta rule and refresh strategy for each.', href: 'https://github.com/openivm/openivm/tree/main/docs/operators' },
+  { t: 'Optimizations', d: 'Empty-delta skipping, delta consolidation, insert-only fast paths, FK-aware pruning.', href: 'https://github.com/openivm/openivm/tree/main/docs/optimizations' },
+  { t: 'Refresh and pipelines', d: 'Refresh strategies, scheduled refresh, cascades and pipeline refresh.', href: 'https://github.com/openivm/openivm/tree/main/docs/refresh' },
   { t: 'Limitations', d: 'What falls back to full refresh today, and why.', href: `${DOCS}/limitations.md` },
   { t: 'The paper', d: 'OpenIVM: a SQL-to-SQL Compiler for Incremental Computations. SIGMOD Companion 2024.', href: 'https://dl.acm.org/doi/10.1145/3626246.3654743' },
 ];

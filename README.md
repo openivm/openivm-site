@@ -15,6 +15,16 @@ npm run build     # type-check + build to dist/
 npm run preview   # serve dist/ locally
 ```
 
+The benchmark at `/benchmark/` reads the public Parquet snapshot directly in the browser. The storage account
+must allow the site's origin and expose its range response headers through CORS. For local live data, use
+`npm run dev -- --host 127.0.0.1 --port 4175`, an allowed origin. `VITE_PARQUET_URL` changes the default source;
+the `?data=` query parameter overrides it for an individual view.
+
+Run `npm run fixture` to generate ignored synthetic datasets in `.benchmark-fixtures/`, then visit
+`/benchmark/?data=/data/_server.parquet` to preview a richer history. The development server also serves
+`one-commit.parquet` and `incompatible.parquet` with the strong ETags required by the reader. `npm test`
+regenerates these fixtures before running the dashboard tests. They are for local development only.
+
 ## Layout
 
 ```
@@ -38,9 +48,11 @@ The site is a Cloudflare Worker serving static assets (`wrangler.jsonc`), bound 
 `www.openivm.org` as custom domains.
 
 **Every push to `main` deploys automatically** through GitHub Actions (`.github/workflows/ci.yml`): the workflow
-builds and type-checks the site, then publishes it with Wrangler. Pull requests are built and checked but never
-deployed, so open a PR, let CI pass, and merge. To redeploy without a change, run the workflow manually from the
-**Actions** tab.
+builds, type-checks and tests the site, then publishes it with Wrangler. Pull request events never deploy.
+To redeploy `main`, run the workflow manually from the **Actions** tab. To deploy a trusted first-party branch
+before merging, select that branch in the manual run and explicitly enable **Deploy this manually selected branch
+to production**. The production environment's protections still apply. The selected branch's build is deployed
+to the live domains, not a preview URL; manually redeploy `main` to roll back to its current revision.
 
 Contributors only need write access to this repository. The workflow authenticates with two repository secrets:
 
@@ -73,6 +85,5 @@ The wordmark is Inter (600 for "Open", 800 for "IVM"), converted to outlines so 
 
 ## Roadmap
 
-- Live benchmark fed by `ivm-bench` (static Parquet, rendered in-browser)
-- Spark quickstart and best-practice guides
+- Spark best-practice guides
 - Docs / blog section

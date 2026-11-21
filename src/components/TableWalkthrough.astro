@@ -1,0 +1,62 @@
+---
+interface Props { engine: 'duckdb' | 'spark' }
+const { engine } = Astro.props;
+const spark = engine === 'spark';
+const stages = spark ? [
+  { step: '01 · Base table', name: 'sales_i1', cols: ['region', 'amount'], rows: [['east', '100'], ['west', '200']] },
+  { step: '02 · Initial view', name: 'mv_i1', cols: ['region', 'total', 'cnt'], rows: [['east', '100', '1'], ['west', '200', '1']] },
+  { step: '03 · Insert', name: 'sales_i1', cols: ['region', 'amount'], rows: [['north', '300'], ['east', '50']], changes: ['insert', 'insert'] },
+  { step: '04 · After refresh', name: 'mv_i1', cols: ['region', 'total', 'cnt'], rows: [['east', '150', '2'], ['north', '300', '1'], ['west', '200', '1']], changes: ['insert', 'insert', ''] },
+] : [
+  { step: '01 · Base table', name: 'sales', cols: ['region', 'product', 'amount'], rows: [['US', 'Widget', '100'], ['EU', 'Gadget', '200']] },
+  { step: '02 · Initial view', name: 'regional_totals', cols: ['region', 'total', 'cnt'], rows: [['EU', '200', '1'], ['US', '100', '1']] },
+  { step: '03 · Changes', name: 'sales', cols: ['region', 'product', 'amount'], rows: [['US', 'Bolt', '50'], ['JP', 'Gear', '300'], ['EU', 'Gadget', '200']], changes: ['insert', 'insert', 'delete'] },
+  { step: '04 · After refresh', name: 'regional_totals', cols: ['region', 'total', 'cnt'], rows: [['JP', '300', '1'], ['US', '150', '2']], changes: ['insert', 'insert'] },
+];
+---
+
+<div class="walkthrough" aria-label={`${spark ? 'Spark' : 'DuckDB'} sample data walkthrough`}>
+  <div class="walk-head"><div><span class="eyebrow">Follow the data</span><h3>From rows to a refreshed view.</h3></div><p>Same rows as the first example above.</p></div>
+  <div class="stages">
+    {stages.map((stage, i) => <div class="stage">
+      <div class="stage-label">{stage.step}</div>
+      <div class="table-card">
+        <div class="table-name">{spark && <img src="/icons/delta-lake.svg" width="26" height="26" alt="Delta Lake" />}<code>{stage.name}</code><span>{i === 1 || i === 3 ? 'VIEW' : 'TABLE'}</span></div>
+        <table><thead><tr>{stage.cols.map(col => <th scope="col">{col}</th>)}</tr></thead>
+          <tbody>{stage.rows.map((row, rowIndex) => <tr class={stage.changes?.[rowIndex] || undefined}>{row.map(value => <td>{value}</td>)}</tr>)}</tbody>
+        </table>
+      </div>
+      {i < stages.length - 1 && <span class="flow" aria-hidden="true">→</span>}
+    </div>)}
+  </div>
+  <p class="walk-key"><span class="added">●</span> inserted / changed <span class="removed">●</span> deleted <span>·</span> refresh updates the materialized view</p>
+</div>
+
+<style>
+  .walkthrough { margin-top: 26px; padding: clamp(20px, 3vw, 30px); border: 1px solid var(--border-strong); border-radius: 16px; background: radial-gradient(ellipse at 75% 0, rgba(182,156,255,.13), transparent 55%), var(--surface); overflow: hidden; }
+  .walk-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:end; gap:12px; margin-bottom:22px; }
+  .walk-head h3 { font-size:1.3rem; margin-top:5px; }
+  .walk-head p, .walk-key { color:var(--muted); font-size:.84rem; }
+  .stages { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:20px; }
+  .stage { min-width:0; position:relative; }
+  .stage-label { color:var(--accent); font:600 .72rem var(--font-mono); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
+  .table-card { border:1px solid var(--border-strong); border-radius:10px; background:var(--bg); overflow:auto; height:calc(100% - 24px); }
+  .table-name { display:flex; align-items:center; gap:8px; padding:10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  .table-name img { display:block; flex:none; }
+  .table-name code { font-size:.75rem; color:var(--text); }
+  .table-name span { margin-left:auto; font:600 .6rem var(--font-mono); color:var(--faint); }
+  table { width:100%; border-collapse:collapse; text-align:left; font: .72rem var(--font-mono); }
+  th, td { padding:7px 8px; white-space:nowrap; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:500; }
+  td { color:var(--text); }
+  tr.insert { background:color-mix(in srgb, var(--insert) 14%, transparent); animation: highlight 4s ease-in-out infinite; }
+  tr.delete { background:color-mix(in srgb, var(--delete) 15%, transparent); color:var(--delete); }
+  tr.delete td { color:var(--delete); text-decoration:line-through; }
+  .flow { position:absolute; right:-17px; top:48%; color:var(--accent); font-weight:700; }
+  .walk-key { margin-top:18px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .added { color:var(--insert); } .removed { color:var(--delete); }
+  @keyframes highlight { 50% { background:color-mix(in srgb, var(--insert) 26%, transparent); } }
+  @media (max-width: 1000px) { .stages { grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:22px; } .stage:nth-child(2) .flow { display:none; } }
+  @media (max-width: 520px) { .stages { grid-template-columns:1fr; } .flow { right:10px; top:auto; bottom:-21px; transform:rotate(90deg); } .stage:nth-child(2) .flow { display:block; } }
+  @media (prefers-reduced-motion: reduce) { tr.insert { animation:none; } }
+</style>

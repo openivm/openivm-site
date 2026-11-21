@@ -5,16 +5,23 @@
   "private": true,
   "scripts": {
     "dev": "astro dev",
+    "fixture": "node tools/dashboard-fixture.mjs",
+    "pretest": "npm run fixture",
+    "test": "node --disable-warning=ExperimentalWarning --test src/benchmark/*.test.ts",
     "build": "astro check && astro build",
     "preview": "astro preview",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
+    "@astrojs/preact": "^6.1.6",
     "@astrojs/sitemap": "^3.7.4",
-    "astro": "^7.3.5"
+    "astro": "^7.3.5",
+    "hyparquet": "^1.33.0",
+    "preact": "^11.2.0"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "hyparquet-writer": "^0.18.0",
     "typescript": "^6.0.3",
     "wrangler": "^4.143.0"
   },
